@@ -7,10 +7,11 @@
          state, TLB, TECH_MAP,
          getCurrentMeasure, getSelectedEvent, isNoteSelected,
          getEventLinks, hasLinkType, getSpansAtPosition,
-         validateSong, toast
-   
+         validateSong, toast (toast.js)
+
    stateを読むが広く書き換えない。validateSong本体はmodel.js。
-   このファイルは state.js, model.js, selection-edit.js の後に読み込む。
+   このファイルは state.js, model.js, selection-edit.js, toast.js の後に読み込む。
+   toast関数は toast.js に分離済み (Phase 36)。
 */
 
 function pushActionLog(msg){
@@ -95,8 +96,7 @@ function runDebugValidate(){
   else{out.innerHTML=issues.map(i=>'<div class="dbg-warn">⚠ '+i+"</div>").join("")}
 }
 
-/* ================================================================ TOAST ================================================================ */
-let _toastT=null;function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");if(_toastT)clearTimeout(_toastT);_toastT=setTimeout(()=>{el.classList.remove("show")},1200)}
+/* toast 関数は toast.js へ分離済み (Phase 36) */
 
 /* ================================================================
    Phase 17: コンテキストメニュー
@@ -105,4 +105,4 @@ let _toastT=null;function toast(msg){const el=document.getElementById("toast");e
    Viewerでは編集メニュー無効。
 */
 
-/* toast は ui-app.js 側で定義 */
+/* context-menu 実装は context-menu.js 側 */

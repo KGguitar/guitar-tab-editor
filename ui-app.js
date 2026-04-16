@@ -28,7 +28,9 @@ function openTSPopup(el){const old=document.querySelector(".ts-popup");if(old){o
 
 /* context-menu関数は context-menu.js へ分離済み (Phase 32) */
 
-/* keyboard/help/pending関数は keyboard.js へ分離済み (Phase 33) */
+/* keyboard/pending関数は keyboard.js へ分離済み (Phase 33) */
+/* toast関数は toast.js へ分離済み (Phase 36) */
+/* help関数は help.js へ分離済み (Phase 36) */
 
 /* ================================================================ BUILD UI ================================================================ */
 function buildStringButtons(){const g=document.getElementById("ep-strings");g.innerHTML="";TLB.standard.forEach((label,i)=>{const b=document.createElement("button");b.className="ep-btn string-btn"+(i===cur.inputString?" act":"");b.textContent=label;b.title=(i+1)+"弦";b.addEventListener("click",()=>setInputString(i));g.appendChild(b)})}
