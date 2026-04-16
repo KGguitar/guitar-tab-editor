@@ -31,6 +31,7 @@ function openTSPopup(el){const old=document.querySelector(".ts-popup");if(old){o
 /* keyboard/pending関数は keyboard.js へ分離済み (Phase 33) */
 /* toast関数は toast.js へ分離済み (Phase 36) */
 /* help関数は help.js へ分離済み (Phase 36) */
+/* storage slot / autobackup / draft 運用は storage-slots.js へ分離済み (Phase 37) */
 
 /* ================================================================ BUILD UI ================================================================ */
 function buildStringButtons(){const g=document.getElementById("ep-strings");g.innerHTML="";TLB.standard.forEach((label,i)=>{const b=document.createElement("button");b.className="ep-btn string-btn"+(i===cur.inputString?" act":"");b.textContent=label;b.title=(i+1)+"弦";b.addEventListener("click",()=>setInputString(i));g.appendChild(b)})}
@@ -137,8 +138,8 @@ function bindAll(){
   document.getElementById("pad-str-up").addEventListener("click",()=>{moveString(-1);focus()});document.getElementById("pad-str-dn").addEventListener("click",()=>{moveString(1);focus()});
   document.getElementById("fb-area").addEventListener("click",handleFBInput);
   document.getElementById("jsonFileIn").addEventListener("change",function(){if(this.files.length){importSongJson(this.files[0]);this.value=""}});
-  document.getElementById("rY").addEventListener("click",function(){document.getElementById("rDlg").style.display="none";const s=loadLS();if(s){applySong(s)}else{render();renderFB()}});
-  document.getElementById("rN").addEventListener("click",function(){document.getElementById("rDlg").style.display="none";localStorage.removeItem(SK);render();renderFB()});
+  document.getElementById("rY").addEventListener("click",function(){document.getElementById("rDlg").style.display="none";const s=draftRead();if(s){applySong(s)}else{render();renderFB()}});
+  document.getElementById("rN").addEventListener("click",function(){document.getElementById("rDlg").style.display="none";draftClear();render();renderFB()});
   bindToolsEvents();
   bindSlotsEvents();
   bindDebugDelegation();
@@ -221,14 +222,14 @@ function init(){
   /* Debug panel */
   document.getElementById("debug-toggle").addEventListener("click",toggleDebugPanel);
   document.addEventListener("keydown",function(e){if(e.ctrlKey&&e.shiftKey&&e.key==="D"){e.preventDefault();toggleDebugPanel()}});
-  /* Phase 24: 起動時復元導線 */
-  const hasDraft=!!loadLS();const ab=loadAutoBackup();
-  if(hasDraft||ab){
+  /* Phase 24 / 37: 起動時復元導線 — 候補判定は storage-slots.js */
+  const cand=getRestoreCandidates();
+  if(cand.hasDraft||cand.hasAutobackup){
     let msg="";
-    if(hasDraft)msg+="下書きデータがあります。";
-    if(ab){const d=new Date(ab.savedAt);msg+="\n自動BK: "+(ab.title||"無題")+" ("+d.toLocaleTimeString().slice(0,5)+")"}
+    if(cand.hasDraft)msg+="下書きデータがあります。";
+    if(cand.hasAutobackup){const d=new Date(cand.autobackup.savedAt);msg+="\n自動BK: "+(cand.autobackup.title||"無題")+" ("+d.toLocaleTimeString().slice(0,5)+")"}
     document.getElementById("rDlg-msg").textContent=msg||"前回のデータを復元しますか？";
-    if(ab&&!hasDraft){
+    if(cand.hasAutobackup&&!cand.hasDraft){
       const abBtn=document.createElement("button");abBtn.textContent="自動BKから復元";abBtn.style.cssText="margin-top:6px;font:13px var(--fu);padding:6px 14px;border:1px solid var(--ui-bdr);background:#fff;border-radius:5px;cursor:pointer";
       abBtn.addEventListener("click",()=>{document.getElementById("rDlg").style.display="none";restoreAutoBackup()});
       document.getElementById("rDlg-ab").appendChild(abBtn);

@@ -1,19 +1,26 @@
 /* ================================================================
-   io.js — 保存 / 読込 / 変換 / 出力責務
+   io.js — ファイル入出力 / serialize / 交換モデル出力 / PNG出力
    ================================================================
+   責務: JSON export/import、PNG export、exchange/shared model 出力、
+         serialize/deserialize/normalize。
+         保存スロット・autobackup・draft の localStorage 運用は
+         storage-slots.js へ分離済み (Phase 37)。
+         ここに残る slot/autobackup 関数は UI演出(toast/confirm/pushActionLog)
+         を付けた薄いラッパー。
+
    依存: グローバル変数 song, sel, cur, editorMeta, state, playback,
          SK, TPB, GS, NSTR, SH, SP, LANE, TUN,
          dc, mTk, nAttrs, nLinks, nMeasureAttrs, nM, uid, srt, sfn,
          nSpan, cleanupDanglingLinks, cleanupInvalidSpans,
          migrateEvent, normalizeSong (model系 — まだ分離していない),
-         toast, pushActionLog, render, renderFB, renderSlotPanel,
+         toast (toast.js), pushActionLog, render, renderFB,
          reconcileSelection, syncUI,
          drawStaff, drawNotes, drawRhythm, drawLinks, drawSpans,
-         drawTickAttrs, drawRests, drawMeasureAttrs (PNG出力用)
-   
-   将来: state.js から state.song/state.editorMeta を受け取る形へ移行。
-         normalizeSong/migrateEvent は model.js 分離時に import へ変更。
-   
+         drawTickAttrs, drawRests, drawMeasureAttrs (PNG出力用),
+         storage-slots.js: makeStoredSnapshot, draftWrite/Read/Clear,
+         slotStorageWrite/Read/Delete/Info, autoBackupWriteNow/Read/Clear/Schedule,
+         SLOT_COUNT
+
    このファイルは単独では動かない。index.html から <script src="io.js"> で読み込む。
 */
 
@@ -327,69 +334,58 @@ function exportSharedJson(){
   toast("共有JSON出力"+(issues.length?" (警告"+issues.length+"件)":""));
 }
 
-/* --- localStorage: 作業中下書き --- */
-function saveToLocalDraft(){try{localStorage.setItem(SK,JSON.stringify(serializeSong(song)));editorMeta.isDirty=false}catch(e){}}
-function loadFromLocalDraft(){try{const d=localStorage.getItem(SK);return d?JSON.parse(d):null}catch(e){return null}}
-/* 後方互換 */
-function save(){saveToLocalDraft();scheduleAutoBackup()}
-function loadLS(){return loadFromLocalDraft()}
-
 /* ================================================================
-   Phase 24: 保存スロット / 自動バックアップ / 復元導線
+   Phase 24 / 37: 保存スロット / 自動バックアップ / 復元導線
    ================================================================
    - スロット: 意図的に残す案（ユーザー明示操作）
    - autobackup: 事故対策（debounce自動保存、常に最新）
    - dirty: 未保存状態の追跡
    - 保存フォーマット: serializeSong() 統一（schemaVersion付き）
+
+   localStorage のデータ運用プリミティブは storage-slots.js へ分離済み (Phase 37)。
+   ここは toast / confirm / pushActionLog / renderSlotPanel 等の UI 演出を
+   薄くラップする層。
 */
 
-const SLOT_COUNT=5;
-const SLOT_PREFIX="tabEditor.slot.";
-const AB_KEY="tabEditor.autobackup";
+/* --- 作業中下書き（UI演出なし） --- */
+function saveToLocalDraft(){if(draftWrite(song))editorMeta.isDirty=false}
+function loadFromLocalDraft(){return draftRead()}
+/* 後方互換 */
+function save(){saveToLocalDraft();scheduleAutoBackup()}
+function loadLS(){return loadFromLocalDraft()}
 
-function makeStoredSnapshot(s){
-  const data=serializeSong(s);
-  return{savedAt:Date.now(),title:s.meta.title||"",measureCount:s.measures.length,
-    eventCount:s.measures.reduce((n,m)=>n+(m.events?m.events.length:0),0),
-    schemaVersion:data.schemaVersion,data};
-}
-
-/* --- スロット操作 --- */
+/* --- スロット操作（UI演出込みラッパー） --- */
 function saveToSlot(n){
-  try{localStorage.setItem(SLOT_PREFIX+n,JSON.stringify(makeStoredSnapshot(song)));editorMeta.isDirty=false;
-    pushActionLog("Save slot "+n);toast("スロット"+n+"に保存")}catch(e){toast("保存失敗")}
+  if(slotStorageWrite(n,song)){
+    editorMeta.isDirty=false;pushActionLog("Save slot "+n);toast("スロット"+n+"に保存");
+  }else{toast("保存失敗")}
 }
 function loadFromSlot(n){
-  try{const raw=localStorage.getItem(SLOT_PREFIX+n);if(!raw){toast("スロット"+n+"は空");return}
-    if(editorMeta.isDirty&&!confirm("未保存の変更があります。読み込みますか？"))return;
-    const snap=JSON.parse(raw);applySong(snap.data);pushActionLog("Load slot "+n);toast("スロット"+n+"から読込")}catch(e){toast("読込失敗")}
+  const snap=slotStorageRead(n);
+  if(!snap){toast("スロット"+n+"は空");return}
+  if(editorMeta.isDirty&&!confirm("未保存の変更があります。読み込みますか？"))return;
+  try{applySong(snap.data);pushActionLog("Load slot "+n);toast("スロット"+n+"から読込")}
+  catch(e){toast("読込失敗")}
 }
 function deleteSlot(n){
   if(!confirm("スロット"+n+"を削除しますか？"))return;
-  localStorage.removeItem(SLOT_PREFIX+n);pushActionLog("Delete slot "+n);toast("スロット"+n+"を削除");renderSlotPanel();
+  slotStorageDelete(n);pushActionLog("Delete slot "+n);toast("スロット"+n+"を削除");renderSlotPanel();
 }
-function getSlotInfo(n){
-  try{const raw=localStorage.getItem(SLOT_PREFIX+n);if(!raw)return null;
-    const snap=JSON.parse(raw);return{title:snap.title||"",savedAt:snap.savedAt,measureCount:snap.measureCount,eventCount:snap.eventCount}}catch(e){return null}
-}
+function getSlotInfo(n){return slotStorageInfo(n)}
 
-/* --- 自動バックアップ --- */
+/* --- 自動バックアップ（UI演出込みラッパー） --- */
 function scheduleAutoBackup(){
   editorMeta.isDirty=true;
-  if(_autoBackupTimer)clearTimeout(_autoBackupTimer);
-  _autoBackupTimer=setTimeout(()=>{
-    try{localStorage.setItem(AB_KEY,JSON.stringify(makeStoredSnapshot(song)))}catch(e){}
-  },8000);/* 8秒無操作で自動保存 */
+  autoBackupSchedule(song,8000);/* 8秒無操作で自動保存 */
 }
-function loadAutoBackup(){
-  try{const raw=localStorage.getItem(AB_KEY);if(!raw)return null;return JSON.parse(raw)}catch(e){return null}
-}
+function loadAutoBackup(){return autoBackupRead()}
 function restoreAutoBackup(){
-  const snap=loadAutoBackup();if(!snap||!snap.data){toast("自動バックアップなし");return}
+  const snap=autoBackupRead();
+  if(!snap||!snap.data){toast("自動バックアップなし");return}
   if(editorMeta.isDirty&&!confirm("未保存の変更があります。復元しますか？"))return;
   applySong(snap.data);pushActionLog("Restore autobackup");toast("自動バックアップから復元");
 }
-function clearAutoBackup(){localStorage.removeItem(AB_KEY)}
+function clearAutoBackup(){autoBackupClear()}
 
 /* --- スロット一覧パネル --- */
 function renderSlotPanel(){
