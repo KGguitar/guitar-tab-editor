@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>TAB Editor — PC</title>
+<style>
+:root{
+  --bg:#e8e5e0;--paper:#fff;--ink:#111;--ink2:#444;--ink3:#888;--ink4:#b0b0b0;
+  --ui:#f4f3f0;--ui-bdr:#ccc;--ui-act:#e0ddd8;--accent:#2a7af5;
+  --chord-accent:#e07020;--chord-bg:rgba(224,112,32,.08);--chord-bdr:rgba(224,112,32,.5);
+  --fb-bg:linear-gradient(180deg,#4a3018 0%,#362010 100%);
+  --fb-fret:#6a5030;--fb-wire:rgba(220,210,190,.7);--fb-dot:rgba(240,220,170,.5);
+  --fn:'Consolas','Courier New','Liberation Mono',monospace;
+  --fu:-apple-system,'Segoe UI',Roboto,sans-serif;
+  --epW:230px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--fu);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:13px}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* Toolbar */
+#toolbar{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--ui);border-bottom:1px solid var(--ui-bdr);flex-shrink:0;height:40px}
+.tb-logo{font:700 14px var(--fu);color:var(--accent);letter-spacing:.5px;margin-right:4px}
+.tb-sep{width:1px;height:22px;background:var(--ui-bdr);margin:0 3px}
+.tb-group{display:flex;align-items:center;gap:3px}
+.tb-label{font:500 11px var(--fu);color:var(--ink3);margin-right:2px}
+.tb-input{background:#fff;border:1px solid var(--ui-bdr);color:var(--ink);padding:3px 6px;border-radius:3px;font:500 12px var(--fu);width:50px;text-align:center}
+.tb-input:focus{border-color:var(--accent);outline:none}
+.tb-input.wide{width:110px;text-align:left}
+.tb-btn{background:#fff;border:1px solid var(--ui-bdr);color:var(--ink);padding:4px 10px;border-radius:4px;cursor:pointer;font:500 12px var(--fu);white-space:nowrap;transition:background .1s}
+.tb-btn:hover{background:var(--ui-act)}
+.tb-btn:active{background:#d8d5d0}
+.tb-btn.act{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tb-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+
+/* Main */
+#main{display:flex;flex:1;overflow:hidden}
+
+/* Score */
+#score-area{flex:1;overflow:auto;display:flex;justify-content:center;background:var(--paper);padding:16px 8px 80px}
+#score-inner{width:100%;max-width:900px}
+.sh-hd{display:flex;align-items:center;justify-content:center;margin-bottom:12px;gap:16px}
+.sh-hd .meta-ts{display:flex;flex-direction:column;align-items:center;line-height:1;font:800 20px var(--fn);color:var(--ink);cursor:pointer;padding:2px 4px;border-radius:3px}
+.sh-hd .meta-ts:hover{background:rgba(0,0,0,.04)}
+.sh-hd .meta-bpm{font:700 18px var(--fu);color:var(--ink);cursor:pointer;padding:2px 6px;border-radius:3px}
+.sh-hd .meta-bpm:hover{background:rgba(0,0,0,.04)}
+.ts-top,.ts-bot{display:block}.ts-line{display:block;width:14px;height:1.5px;background:var(--ink);margin:1px 0}
+.sys{margin-bottom:14px}.sys-row{display:flex}
+.tab-c{width:18px;display:flex;flex-direction:column;justify-content:center;align-items:center;flex-shrink:0;user-select:none}
+.tab-c span{font:800 11px var(--fn);color:var(--ink2);line-height:1.1}
+.ms{flex:1;position:relative;min-width:0;cursor:pointer}
+.ms-cur{background:rgba(42,122,245,.04);border-radius:4px;box-shadow:0 0 0 1.5px rgba(42,122,245,.15)}
+.ms-cur.chord-mode{background:var(--chord-bg);box-shadow:0 0 0 1.5px var(--chord-bdr)}
+.ms-measure-sel{box-shadow:0 0 0 2px rgba(180,80,180,.4)!important;background:rgba(180,80,180,.04)!important}
+.ms-n{position:absolute;top:-13px;left:-2px;font:800 12px var(--fu);color:#c04030}
+.ms canvas{display:block}
+
+/* Edit panel */
+#edit-panel{width:var(--epW);flex-shrink:0;background:var(--ui);border-right:1px solid var(--ui-bdr);overflow-y:auto;display:flex;flex-direction:column}
+.ep-section{padding:10px 12px;border-bottom:1px solid var(--ui-bdr)}.ep-section:last-child{border-bottom:none}
+.ep-title{font:600 10px var(--fu);color:var(--ink3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.ep-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;font-size:12px;color:var(--ink2)}.ep-row .val{color:var(--accent);font-weight:700}
+.ep-grid{display:grid;gap:3px}.ep-grid.c2{grid-template-columns:1fr 1fr}.ep-grid.c3{grid-template-columns:1fr 1fr 1fr}.ep-grid.c4{grid-template-columns:1fr 1fr 1fr 1fr}.ep-grid.c6{grid-template-columns:repeat(6,1fr)}
+.ep-btn{background:#fff;border:1px solid var(--ui-bdr);color:var(--ink);padding:5px 4px;border-radius:4px;cursor:pointer;font:500 12px var(--fu);text-align:center;transition:background .1s}
+.ep-btn:hover{background:var(--ui-act)}.ep-btn.act{background:var(--accent);color:#fff;border-color:var(--accent)}.ep-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.ep-btn.sm{font-size:11px;padding:4px 3px}.ep-btn.danger{color:#999;border-color:#ddd}.ep-btn.danger:hover{background:#e44;color:#fff;border-color:#e44}
+.ep-btn.string-btn{font:600 13px var(--fn);padding:4px 0;min-height:30px}.ep-btn.string-btn.act{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ep-btn.string-btn.act.chord-mode{background:var(--chord-accent);border-color:var(--chord-accent)}
+.ep-btn.string-btn.has-note{border-color:var(--accent);color:var(--accent);font-weight:700}
+.ep-btn.string-btn.has-note.chord-mode{border-color:var(--chord-accent);color:var(--chord-accent)}
+.ep-actions{display:flex;flex-direction:column;gap:3px}
+
+/* Link target UI */
+.link-item{margin-bottom:6px;padding:5px 6px;background:#fff;border:1px solid var(--ui-bdr);border-radius:4px}
+.link-item-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.link-type-label{font:600 11px var(--fu);color:var(--accent)}
+.link-remove{font:500 10px var(--fu);color:#c44;cursor:pointer;padding:1px 4px;border-radius:3px}
+.link-remove:hover{background:#fee}
+.link-target{font:500 11px var(--fu);color:var(--ink2);margin-bottom:2px}
+.link-target.unlinked{color:#c44;font-style:italic}
+.link-select{width:100%;font:500 11px var(--fu);padding:3px 4px;border:1px solid var(--ui-bdr);border-radius:3px;background:#fff;color:var(--ink)}
+.mode-toggle{display:flex;border-radius:5px;overflow:hidden;border:1px solid var(--ui-bdr);margin-bottom:8px}
+.mode-btn{flex:1;padding:7px 4px;font:600 12px var(--fu);text-align:center;cursor:pointer;border:none;background:#fff;color:var(--ink2);transition:background .12s,color .12s}
+.mode-btn:first-child{border-right:1px solid var(--ui-bdr)}
+.mode-btn.act-single{background:var(--accent);color:#fff}.mode-btn.act-chord{background:var(--chord-accent);color:#fff}
+.mode-btn:hover:not(.act-single):not(.act-chord){background:var(--ui-act)}
+.ep-status{display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(42,122,245,.06);border-radius:4px;margin-bottom:6px;font:500 11px var(--fu);color:var(--ink2);min-height:26px}
+.ep-status.chord-mode{background:var(--chord-bg)}
+.ep-status .st-label{color:var(--ink3);flex-shrink:0}.ep-status .st-val{font-weight:700}
+.ep-status .st-val.single-color{color:var(--accent)}.ep-status .st-val.chord-color{color:var(--chord-accent)}
+.ep-status .st-note-count{margin-left:auto;font:600 11px var(--fu);padding:1px 6px;border-radius:8px}
+.ep-status .st-note-count.has-notes{background:var(--accent);color:#fff}.ep-status .st-note-count.has-notes.chord-mode{background:var(--chord-accent)}
+.ep-status .st-note-count.empty{background:transparent;color:var(--ink4)}
+
+/* ===== INPUT PAD (redesigned) ===== */
+#input-pad{
+  flex-shrink:0;background:var(--ui);border-top:1px solid var(--ui-bdr);
+  padding:8px 12px;display:flex;align-items:flex-start;gap:12px;
+}
+
+/* Zone: Operations */
+.pad-ops{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+.pad-ops-label{font:600 9px var(--fu);color:var(--ink4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;text-align:center}
+.pad-ops-row{display:flex;gap:3px}
+.pad-op{
+  width:40px;height:34px;border-radius:4px;border:1px solid var(--ui-bdr);
+  background:#fff;color:var(--ink2);cursor:pointer;font:600 12px var(--fu);
+  display:flex;align-items:center;justify-content:center;transition:background .1s,transform .05s;
+}
+.pad-op:hover{background:var(--ui-act)}
+.pad-op:active{transform:scale(.95)}
+.pad-op.del{color:#c44;border-color:#dcc}
+.pad-op.del:hover{background:#fee;border-color:#c44}
+.pad-op:disabled{opacity:.3;cursor:default;pointer-events:none}
+
+/* Zone separator */
+.pad-vsep{width:1px;background:var(--ui-bdr);align-self:stretch;margin:0 2px;flex-shrink:0}
+
+/* Zone: Main frets (0-12) */
+.pad-main{flex-shrink:0}
+.pad-main-label{font:600 9px var(--fu);color:var(--ink4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;text-align:center}
+.pad-main-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
+.pad-fret{
+  width:38px;height:36px;border-radius:5px;border:1px solid var(--ui-bdr);
+  background:#fff;color:var(--ink);cursor:pointer;
+  font:700 15px var(--fn);display:flex;align-items:center;justify-content:center;
+  transition:background .08s,transform .05s,box-shadow .08s;
+}
+.pad-fret:hover{background:#eef2fa;border-color:var(--accent);box-shadow:0 0 0 1px rgba(42,122,245,.15)}
+.pad-fret:active{transform:scale(.93);background:#dde8f8}
+.pad-fret.zero{
+  grid-column:span 2;width:auto;background:#f0f4ff;border-color:#b8c8e8;font-size:17px;font-weight:800;
+}
+.pad-fret.zero:hover{background:#dde8f8;border-color:var(--accent)}
+
+/* Zone: Extended frets (13-24) */
+.pad-ext{flex-shrink:0}
+.pad-ext-label{font:600 9px var(--fu);color:var(--ink4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;text-align:center}
+.pad-ext-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
+.pad-fret-ext{
+  width:32px;height:30px;border-radius:4px;border:1px solid #ddd;
+  background:#f8f7f5;color:var(--ink3);cursor:pointer;
+  font:600 12px var(--fn);display:flex;align-items:center;justify-content:center;
+  transition:background .08s,transform .05s;
+}
+.pad-fret-ext:hover{background:#eef2fa;border-color:var(--accent);color:var(--ink)}
+.pad-fret-ext:active{transform:scale(.93)}
+
+/* ===== Fretboard ===== */
+#fb-area{flex-shrink:0;background:var(--fb-bg);border-top:2px solid #1a0800;overflow-x:auto;overflow-y:hidden;display:flex;justify-content:center}
+#fb-area.hidden{display:none}
+.hidden{display:none!important}
+#fb-g{display:inline-flex;flex-direction:column;padding:2px 0 4px}
+.fb-fn-row{display:flex;padding-left:22px;height:18px;align-items:center}
+.fb-fn{text-align:center;font:700 12px var(--fn);color:rgba(250,235,200,.85)}
+.fb-r{display:flex;height:30px;align-items:center}
+.fb-sl{width:22px;font:700 11px var(--fn);color:rgba(255,240,200,.9);text-align:center;flex-shrink:0}
+.fb-c{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;border-right:2px solid var(--fb-fret);height:100%}
+.fb-c:first-child{border-right:none}
+.fb-nut-bar{width:5px;height:100%;background:linear-gradient(180deg,#f5eed8,#e0d4b0,#f5eed8);flex-shrink:0;box-shadow:1px 0 3px rgba(0,0,0,.4);border-radius:1px}
+.fb-c::after{content:'';position:absolute;left:0;right:0;top:50%;height:var(--wire-h,2px);background:var(--fb-wire);pointer-events:none;border-radius:1px}
+.fb-c:active,.fb-c.flash{background:rgba(80,160,255,.55)}
+.fb-c.flash::before{content:attr(data-f);position:absolute;z-index:5;font:800 14px var(--fn);color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.fb-dot{position:absolute;width:7px;height:7px;background:var(--fb-dot);border-radius:50%;pointer-events:none;left:50%;transform:translateX(-50%)}
+
+.ts-popup{position:absolute;background:#fff;border:1px solid var(--ui-bdr);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:4px;z-index:100;display:flex;gap:2px}
+.ts-popup button{font:600 14px var(--fu);padding:7px 12px;border:1px solid var(--ui-bdr);background:#fff;color:var(--ink);border-radius:4px;cursor:pointer}
+.ts-popup button:hover{background:var(--ui-act)}.ts-popup button.sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+#status{background:#eae8e3;padding:2px 10px;font:500 11px var(--fu);color:var(--ink3);display:flex;justify-content:space-between;flex-shrink:0;border-top:1px solid var(--ui-bdr)}
+#toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;font:600 13px var(--fu);padding:7px 18px;border-radius:18px;z-index:200;pointer-events:none;opacity:0;transition:opacity .2s}
+#toast.show{opacity:1}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;z-index:1000}
+.dlg{background:#fff;border-radius:10px;padding:20px 24px;text-align:center;max-width:270px;box-shadow:0 6px 24px rgba(0,0,0,.1)}
+.dlg p{margin-bottom:12px;color:var(--ink);font-size:15px;line-height:1.5}
+.dlg button{font:15px var(--fu);padding:8px 20px;margin:0 4px;border:1px solid var(--ui-bdr);background:#fff;color:var(--ink);border-radius:5px;cursor:pointer}
+.dlg button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:#c0bdb8;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#a0a0a0}
+
+/* Context Menu */
+#ctx-menu{position:fixed;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:900;min-width:180px;padding:4px 0;display:none;font:13px var(--fu)}
+
+/* Debug Panel */
+#debug-panel{position:fixed;right:0;top:40px;bottom:28px;width:280px;background:#1a1a2e;color:#c8c8d4;font:11px var(--fn);overflow-y:auto;z-index:800;display:none;border-left:2px solid #333;padding:8px}
+#debug-panel.open{display:block}
+.dbg-title{font:700 12px var(--fu);color:#7af;margin:8px 0 4px;border-bottom:1px solid #333;padding-bottom:2px}
+.dbg-row{padding:1px 0;font:11px var(--fn);color:#aab;word-break:break-all}
+.dbg-row .dbg-key{color:#7ca;margin-right:4px}
+.dbg-row .dbg-val{color:#dda}
+.dbg-log{font:10px var(--fn);color:#8a8;padding:1px 0;border-bottom:1px solid #222}
+.dbg-log .dbg-time{color:#666;margin-right:4px}
+.dbg-warn{color:#e88;font:10px var(--fn);padding:1px 0}
+.dbg-btn{background:#2a2a3e;border:1px solid #444;color:#aab;padding:3px 8px;border-radius:3px;cursor:pointer;font:10px var(--fu);margin:2px}
+.dbg-btn:hover{background:#3a3a4e}
+#debug-toggle{position:fixed;right:4px;bottom:32px;width:24px;height:24px;background:#333;color:#888;border:1px solid #555;border-radius:4px;cursor:pointer;font:10px var(--fn);z-index:801;display:flex;align-items:center;justify-content:center}
+#debug-toggle:hover{background:#444;color:#aaa}
+.ctx-header{padding:4px 12px;font:600 11px var(--fu);color:var(--ink3);border-bottom:1px solid #eee;margin-bottom:2px}
+.ctx-item{padding:5px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--ink)}
+.ctx-item:hover{background:rgba(42,122,245,.08)}
+.ctx-item.disabled{opacity:.35;pointer-events:none}
+.ctx-item .ctx-check{width:14px;text-align:center;font-size:11px;color:var(--accent)}
+.ctx-item .ctx-key{margin-left:auto;font:500 10px var(--fn);color:var(--ink4)}
+.ctx-sep{height:1px;background:#eee;margin:3px 0}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="toolbar">
+  <span class="tb-logo">TAB EDITOR</span><div class="tb-sep"></div>
+  <div class="tb-group"><span class="tb-label">Title</span><input type="text" class="tb-input wide" id="inp-title" value="タイトル入力"></div>
+  <div class="tb-sep"></div>
+  <div class="tb-group"><button class="tb-btn" id="btn-undo" disabled>↩ 戻す</button><button class="tb-btn" id="btn-redo" disabled>↪ やり直</button></div>
+  <div class="tb-sep"></div>
+  <div class="tb-group"><button class="tb-btn" id="btn-save" title="JSONファイルとして書き出し">💾 書き出し</button><button class="tb-btn" id="btn-load" title="JSONファイルを読み込み">📂 読込</button><button class="tb-btn" id="btn-png" title="PNG画像として保存">PNG</button><button class="tb-btn" id="btn-exchange" title="交換モデル出力" style="font-size:10px;padding:4px 6px;color:var(--ink3)">EX</button><button class="tb-btn" id="btn-shared" title="共有用軽量JSON出力" style="font-size:10px;padding:4px 6px;color:var(--ink3)">共有</button></div>
+  <div class="tb-sep"></div>
+  <div class="tb-group"><button class="tb-btn" id="btn-fb-toggle">🎸 指板</button></div>
+  <div class="tb-sep"></div>
+  <div class="tb-group"><button class="tb-btn" id="btn-play" title="再生 (現在位置から)">▶ 再生</button><button class="tb-btn" id="btn-play-top" title="先頭から再生" style="padding:4px 6px">⏮▶</button><button class="tb-btn" id="btn-stop" title="停止" disabled>⏹ 停止</button><button class="tb-btn" id="btn-loop" title="ループ ON/OFF" style="padding:4px 6px">🔁</button><button class="tb-btn" id="btn-play-range" title="選択範囲を再生" style="padding:4px 6px;font-size:10px">範囲▶</button></div>
+  <div class="tb-sep"></div>
+  <div class="tb-group"><button class="tb-btn" id="btn-viewer" title="閲覧モードへ切替">👁 Viewer</button></div>
+</div>
+
+<div id="main">
+
+<!-- ===== Viewer Mode ===== -->
+<div id="viewer-area" style="display:none;flex:1;overflow:auto;background:var(--paper);padding:24px">
+  <div id="viewer-inner" style="max-width:900px;margin:0 auto">
+    <div id="viewer-header" style="text-align:center;margin-bottom:16px">
+      <div id="vw-title" style="font:700 20px var(--fu);color:var(--ink);margin-bottom:4px"></div>
+      <div id="vw-meta" style="font:500 13px var(--fu);color:var(--ink2)"></div>
+      <div id="vw-summary" style="font:400 11px var(--fu);color:var(--ink3);margin-top:4px"></div>
+    </div>
+    <div id="vw-systems"></div>
+    <div style="text-align:center;margin-top:20px">
+      <button class="tb-btn" id="btn-back-editor" style="padding:8px 20px">✏️ Editorへ戻る</button>
+      <button class="tb-btn" id="btn-vw-load" style="padding:8px 16px;margin-left:8px">📂 Shared JSON読込</button>
+      <input type="file" id="vwJsonFileIn" accept=".json,.shared.json" style="display:none">
+    </div>
+  </div>
+</div>
+  <div id="edit-panel">
+    <!-- ===== 固定: 現在状態・入力設定 ===== -->
+    <div class="ep-section">
+      <div class="ep-title">現在</div>
+      <div class="ep-status" id="ep-status-bar">
+        <span class="st-label">選択</span><span class="st-val single-color" id="ep-sel-type">Tick</span>
+        <span class="st-label">小節</span><span class="st-val single-color" id="ep-m">1</span>
+        <span class="st-label">Tick</span><span class="st-val single-color" id="ep-t">0</span>
+        <span class="st-note-count empty" id="ep-nc">0音</span>
+      </div>
+      <div class="mode-toggle"><button class="mode-btn act-single" id="mode-single" title="Space切替">♪ 単音</button><button class="mode-btn" id="mode-chord" title="Space切替">♫ 和音</button></div>
+      <div class="ep-grid c6" id="ep-strings" style="margin:4px 0"></div>
+      <div class="ep-grid c3" id="ep-dur" style="margin-bottom:3px"></div>
+      <button class="ep-btn" id="ep-dot" style="width:100%;font-size:11px">付点 .</button>
+    </div>
+
+    <!-- ===== 文脈: note/tick共通 奏法 ===== -->
+    <div class="ep-section" id="sec-tech"><div class="ep-title">奏法（接続系）</div><div class="ep-grid c4" id="ep-tech"></div></div>
+
+    <!-- ===== 文脈: note選択時 単音属性 ===== -->
+    <div class="ep-section" id="sec-note-attrs" style="display:none">
+      <div class="ep-title">単音属性</div>
+      <div class="ep-grid c4">
+        <button class="ep-btn sm" id="ep-accent" title="Accent (A)">Acc</button>
+        <button class="ep-btn sm" id="ep-ghost" title="Ghost (G)">Gho</button>
+        <button class="ep-btn sm" id="ep-dead" title="Dead (Shift+D)">Dead</button>
+        <button class="ep-btn sm" id="ep-harmonic" title="Harmonic (Shift+H)">Harm</button>
+      </div>
+    </div>
+
+    <!-- ===== 文脈: note選択時 接続先 ===== -->
+    <div class="ep-section" id="ep-links-section" style="display:none">
+      <div class="ep-title">接続先</div>
+      <div id="ep-links-list"></div>
+    </div>
+
+    <!-- ===== 文脈: tick属性 ===== -->
+    <div class="ep-section" id="sec-tick-attrs">
+      <div class="ep-title">Tick属性</div>
+      <div class="ep-grid c3">
+        <button class="ep-btn sm" id="ep-strum-dn" title="ストラム↓">↓Str</button>
+        <button class="ep-btn sm" id="ep-strum-up" title="ストラム↑">↑Str</button>
+        <button class="ep-btn sm" id="ep-rest" title="休符">Rest</button>
+      </div>
+    </div>
+
+    <!-- ===== 文脈: 編集操作 ===== -->
+    <div class="ep-section" id="sec-edit">
+      <div class="ep-title">編集</div>
+      <div class="ep-grid c2">
+        <button class="ep-btn sm" id="ep-copy">コピー</button><button class="ep-btn sm" id="ep-paste">貼付</button>
+        <button class="ep-btn sm" id="ep-overwrite">上書</button><button class="ep-btn sm" id="ep-dup">右複製</button>
+        <button class="ep-btn sm" id="ep-tr-down">−1半音</button><button class="ep-btn sm" id="ep-tr-up">+1半音</button>
+        <button class="ep-btn sm" id="ep-mv-l">←移動</button><button class="ep-btn sm" id="ep-mv-r">→移動</button>
+      </div>
+    </div>
+
+    <!-- ===== 文脈: 範囲・Span ===== -->
+    <div class="ep-section" id="sec-range">
+      <div class="ep-title">範囲</div>
+      <div class="ep-grid c2" style="margin-bottom:3px">
+        <button class="ep-btn sm" id="ep-range-start">開始点 ▸</button>
+        <button class="ep-btn sm" id="ep-range-end">終了点 ▪</button>
+        <button class="ep-btn sm" id="ep-range-clear">範囲解除</button>
+        <button class="ep-btn sm" id="ep-sel-measure">小節選択</button>
+      </div>
+      <div class="ep-grid c2">
+        <button class="ep-btn sm" id="ep-pm-start">PM開始</button><button class="ep-btn sm" id="ep-pm-end">PM終了</button>
+        <button class="ep-btn sm" id="ep-lr-start">LR開始</button><button class="ep-btn sm" id="ep-lr-end">LR終了</button>
+      </div>
+      <div id="ep-span-status" style="font:500 10px var(--fu);color:var(--ink3);margin-top:3px"></div>
+    </div>
+
+    <!-- ===== 文脈: 小節操作 ===== -->
+    <div class="ep-section" id="sec-measure">
+      <div class="ep-title">小節</div>
+      <div class="ep-grid c3" style="margin-bottom:3px">
+        <button class="ep-btn sm" id="ep-rpt-start" title="繰返し開始">|:</button>
+        <button class="ep-btn sm" id="ep-rpt-end" title="繰返し終了">:|</button>
+        <button class="ep-btn sm" id="ep-ending" title="Ending番号">End</button>
+      </div>
+      <div class="ep-actions">
+        <button class="ep-btn" id="ep-add-m">＋ 追加</button><button class="ep-btn" id="ep-dup-m">複製</button>
+        <button class="ep-btn danger" id="ep-del-m">削除</button>
+      </div>
+    </div>
+
+    <!-- ===== 固定: 再生 ===== -->
+    <div class="ep-section" style="border-top:2px solid var(--ui-bdr);margin-top:2px;padding-top:6px">
+      <div class="ep-title">再生</div>
+      <div class="ep-grid c3" style="margin-bottom:3px">
+        <button class="ep-btn sm" id="ep-play-sel" title="選択位置から再生">▶ 再生</button>
+        <button class="ep-btn sm" id="ep-play-range" title="範囲再生">範囲▶</button>
+        <button class="ep-btn sm" id="ep-stop2" title="停止">⏹</button>
+      </div>
+      <div class="ep-grid c3" style="margin-bottom:3px">
+        <button class="ep-btn sm" id="ep-loop2" title="ループ切替">🔁 Loop</button>
+        <button class="ep-btn sm" id="ep-countin" title="カウントイン切替">CI</button>
+        <button class="ep-btn sm" id="ep-metro" title="メトロノーム切替">🥁</button>
+      </div>
+      <div style="margin-bottom:3px">
+        <span style="font:500 10px var(--fu);color:var(--ink3)">Speed:</span>
+        <span id="ep-speed-btns" style="display:inline-flex;gap:2px;margin-left:4px"></span>
+      </div>
+      <div class="ep-grid c2">
+        <button class="ep-btn sm" id="ep-set-pr" title="選択を再生範囲に" style="font-size:10px">PR設定</button>
+        <button class="ep-btn sm" id="ep-autoscroll" title="自動追従 ON/OFF" style="font-size:10px">📍追従</button>
+      </div>
+      <div id="ep-play-info" style="font:500 10px var(--fu);color:var(--ink3);margin-top:3px"></div>
+    </div>
+
+    <!-- ===== 低頻度: ツール（折りたたみ） ===== -->
+    <div class="ep-section" style="border-top:1px solid var(--ui-bdr);margin-top:2px">
+      <div class="ep-title" style="cursor:pointer;user-select:none" id="ep-tools-toggle">▸ ツール</div>
+      <div id="ep-tools-body" class="hidden">
+        <div class="ep-grid c2" style="margin-top:3px">
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-export-json">JSON書出</button>
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-import-json">JSON読込</button>
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-png">PNG</button>
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-exchange">EX出力</button>
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-shared">共有JSON</button>
+          <button class="ep-btn sm" style="font-size:10px" id="ep-tool-debug">Debug</button>
+        </div>
+      </div>
+    </div>
+    <!-- ===== 低頻度: 保存スロット（折りたたみ） ===== -->
+    <div class="ep-section" style="border-top:1px solid var(--ui-bdr);margin-top:2px">
+      <div class="ep-title" style="cursor:pointer;user-select:none" id="ep-slots-toggle">▸ 保存スロット</div>
+      <div id="slot-panel-body" class="hidden"></div>
+    </div>
+  </div>
+
+  <div id="score-area" tabindex="0">
+    <div id="score-inner">
+      <div class="sh-hd">
+        <span class="meta-ts" id="shTS"><span class="ts-top">4</span><span class="ts-line"></span><span class="ts-bot">4</span></span>
+        <span class="meta-bpm" id="shBpm">♩= 120</span>
+      </div>
+      <div id="systems"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== INPUT PAD (redesigned) ===== -->
+<div id="input-pad">
+
+  <!-- Operations zone -->
+  <div class="pad-ops">
+    <div class="pad-ops-label">操作</div>
+    <div class="pad-ops-row">
+      <button class="pad-op" id="pad-str-up" title="弦↑ (↑)">▲</button>
+      <button class="pad-op" id="pad-str-dn" title="弦↓ (↓)">▼</button>
+    </div>
+    <div class="pad-ops-row">
+      <button class="pad-op" id="pad-prev" title="前tick (←)">◀</button>
+      <button class="pad-op" id="pad-next" title="次tick (→/Enter)">▶</button>
+    </div>
+    <div class="pad-ops-row">
+      <button class="pad-op del" id="pad-del" title="削除 (Del)" style="width:83px">⌫ 削除</button>
+    </div>
+  </div>
+
+  <div class="pad-vsep"></div>
+
+  <!-- Main frets 0-12 -->
+  <div class="pad-main">
+    <div class="pad-main-label">フレット 0–12</div>
+    <div class="pad-main-grid" id="pad-main-grid"></div>
+  </div>
+
+  <div class="pad-vsep"></div>
+
+  <!-- Extended frets 13-24 -->
+  <div class="pad-ext">
+    <div class="pad-ext-label">13–24</div>
+    <div class="pad-ext-grid" id="pad-ext-grid"></div>
+  </div>
+
+</div>
+
+<div id="fb-area"><div id="fb-g"></div></div>
+
+<div id="status">
+  <span id="st-left">Ready</span>
+  <span id="st-right">Space: モード切替 | Enter: 次tick | ↑↓: 弦 | ←→: tick | 0-9: フレット</span>
+</div>
+
+<div id="toast"></div>
+<div id="ctx-menu"></div>
+<div id="debug-panel"></div>
+<div id="debug-toggle" title="Debug Panel (Ctrl+Shift+D)">🔍</div>
+<div class="ov" id="rDlg" style="display:none"><div class="dlg"><p id="rDlg-msg">前回のデータを復元しますか？</p><button class="pri" id="rY">復元</button> <button id="rN">新規</button><div id="rDlg-ab" style="margin-top:8px"></div></div></div>
+<input type="file" id="jsonFileIn" accept=".json,.tab.json" style="display:none">
+</div>
+
+<!-- Phase 27-34: 分割ファイル読み込み -->
+<!-- dom-refs → model → state → selection-edit → io → playback → render → viewer → debug → context-menu → keyboard → ui-app -->
+<script src="dom-refs.js"></script>
+<script src="model.js"></script>
+<script src="state.js"></script>
+<script src="selection-edit.js"></script>
+<script src="io.js"></script>
+<script src="playback.js"></script>
+<script src="render.js"></script>
+<script src="viewer.js"></script>
+<script src="debug.js"></script>
+<script src="context-menu.js"></script>
+<script src="keyboard.js"></script>
+<script src="ui-app.js"></script>
+
+<script>
+/* 定数・ユーティリティ・データモデル関数は model.js へ分離済み (Phase 28) */
+
+/* state + selection-edit関数は selection-edit.js へ分離済み (Phase 28) */
+
+/* ================================================================ CURSOR ================================================================ */
+/* moveCur〜handleDigitKey は selection-edit.js へ分離済み */
+/* 描画関数は render.js へ分離済み (Phase 29) */
+
+/* UI束ね層は ui-app.js へ分離済み (Phase 30) */
+init();
+</script>
+</body>
+</html>
